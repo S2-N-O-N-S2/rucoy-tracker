@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0d0f1a" />
+  <title>Rucoy Tracker</title>
+  <style>
+    /* ════════════════════════════════════════════════
+       VARIABLES Y RESET
+    ════════════════════════════════════════════════ */
+    :root {
+      --bg:     #0d0f1a;
+      --card:   #141726;
+      --card2:  #191d2e;
+      --input:  #1e2236;
+      --drop:   #1a1e30;
+      --border: #272b42;
+      --acc:    #5b8dee;
+      --acc2:   #7aa3f5;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --orange: #f59e0b;
+      --text:   #e8eaf6;
+      --text2:  #8b90a8;
+      --text3:  #484d66;
+      --melee:  #f97316;
+      --dist:   #22c55e;
+      --def:    #3b82f6;
+      --magic:  #a855f7;
+      --r: 8px;
+      --sh: 0 4px 20px rgba(0,0,0,.45);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh; padding: 1rem .85rem 3rem;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* ════════════════════════════════════════════════
+       LAYOUT — dos columnas en desktop, una en móvil
+    ════════════════════════════════════════════════ */
+    .wrap { max-width: 1080px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 1.2rem; }
+    header h1 {
+      font-size: clamp(1.3rem, 4vw, 1.9rem);
+      font-weight: 800; letter-spacing: -.4px;
+    }
+    header h1 span { color: var(--acc); }
+    header p { color: var(--text2); font-size: .82rem; margin-top: .2rem; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: .9rem;
+      align-items: start;
+    }
+
+    /* En móvil: una sola columna */
+    @media (max-width: 680px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    /* ════════════════════════════════════════════════
+       TARJETAS
+    ════════════════════════════════════════════════ */
+    .sidebar { display: flex; flex-direction: column; gap: .8rem; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 1rem 1.1rem;
+      box-shadow: var(--sh);
+    }
+    .card-title {
+      font-size: .7rem; font-weight: 800; color: var(--text2);
+      text-transform: uppercase; letter-spacing: .08em; margin-bottom: .65rem;
+    }
+
+    /* ════════════════════════════════════════════════
+       INPUTS Y DROPDOWN
+    ════════════════════════════════════════════════ */
+    .iw { position: relative; }
+    .field {
+      width: 100%; background: var(--input); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: .9rem;
+      padding: .55rem .8rem; outline: none;
+      transition: border-color .18s;
+      /* Evitar zoom en iOS al hacer focus */
+      font-size: 16px;
+    }
+    .field:focus { border-color: var(--acc); }
+    .field::placeholder { color: var(--text3); font-size: .88rem; }
+
+    .drop {
+      position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+      background: var(--drop); border: 1px solid var(--border);
+      border-radius: 0 0 7px 7px; max-height: 200px; overflow-y: auto;
+      z-index: 300; display: none; box-shadow: var(--sh);
+    }
+    .drop::-webkit-scrollbar { width: 4px; }
+    .drop::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sug {
+      padding: .52rem .85rem; cursor: pointer; font-size: .88rem;
+      border-bottom: 1px solid var(--border); transition: background .1s;
+      /* Tap sin delay en móvil */
+      touch-action: manipulation;
+    }
+    .sug:last-child { border-bottom: none; }
+    .sug:hover, .sug.hi { background: rgba(91,141,238,.14); color: var(--acc2); }
+    .sug mark { background: rgba(91,141,238,.28); color: var(--acc2); border-radius: 2px; padding: 0 1px; }
+    .sug-msg { padding: .55rem .85rem; font-size: .82rem; color: var(--text2); font-style: italic; }
+
+    /* ════════════════════════════════════════════════
+       BOTONES
+    ════════════════════════════════════════════════ */
+    .btn {
+      display: inline-flex; align-items: center; gap: .38rem;
+      background: var(--acc); color: #fff; border: none;
+      border-radius: 6px; padding: .52rem 1rem;
+      font-size: .88rem; font-weight: 700; cursor: pointer;
+      transition: background .18s, transform .1s;
+      white-space: nowrap; touch-action: manipulation;
+    }
+    .btn:hover  { background: var(--acc2); }
+    .btn:active { transform: scale(.97); }
+
+    .spin-sm {
+      display: none; width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading .spin-sm  { display: inline-block; }
+    .loading .btn-icon { display: none; }
+
+    /* ════════════════════════════════════════════════
+       CONTROLES AUTO-REFRESH
+    ════════════════════════════════════════════════ */
+    .ctrl-row {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: .55rem; margin-top: .7rem;
+    }
+    .auto-lbl {
+      display: flex; align-items: center; gap: .38rem;
+      font-size: .82rem; color: var(--text2);
+    }
+    .auto-lbl input[type=checkbox] { accent-color: var(--acc); cursor: pointer; width: 15px; height: 15px; }
+    .auto-lbl select {
+      background: var(--input); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); padding: .18rem .42rem;
+      font-size: .8rem; cursor: pointer;
+    }
+    #countdown { font-size: .74rem; color: var(--text3); min-width: 60px; }
+    #status    { font-size: .74rem; color: var(--text3); margin-top: .38rem; min-height: .85rem; }
+
+    /* ════════════════════════════════════════════════
+       BUSCADOR DE JUGADOR
+    ════════════════════════════════════════════════ */
+    .player-row { display: flex; gap: .45rem; }
+    .player-row .field { flex: 1; min-width: 0; }
+    .btn-pj {
+      background: var(--acc); color: #fff; border: none;
+      border-radius: 6px; padding: 0 .85rem; font-size: .88rem;
+      font-weight: 700; cursor: pointer; white-space: nowrap;
+      transition: background .18s; touch-action: manipulation;
+      flex-shrink: 0;
+    }
+    .btn-pj:hover    { background: var(--acc2); }
+    .btn-pj:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Panel resultado jugador */
+    #pj-result { margin-top: .7rem; display: none; }
+    .pj-card {
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .8rem .95rem;
+    }
+
+    /* Cabecera: nombre + online + nivel */
+    .pj-head {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: .4rem; margin-bottom: .45rem;
+    }
+    .pj-name { font-size: .95rem; font-weight: 800; }
+    .badge-on {
+      font-size: .68rem; font-weight: 700; color: var(--green);
+      background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.28);
+      border-radius: 20px; padding: .13rem .52rem; white-space: nowrap;
+    }
+    .badge-off {
+      font-size: .68rem; font-weight: 700; color: var(--text3);
+      background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      border-radius: 20px; padding: .13rem .52rem; white-space: nowrap;
+    }
+    .pj-nivel {
+      font-size: .72rem; font-weight: 700; color: var(--acc);
+      background: rgba(91,141,238,.1); border: 1px solid rgba(91,141,238,.25);
+      border-radius: 20px; padding: .13rem .52rem; white-space: nowrap;
+    }
+
+    /* Botón clan — clicable */
+    .clan-btn {
+      display: inline-flex; align-items: center; gap: .28rem;
+      background: rgba(91,141,238,.08); color: var(--acc);
+      border: 1px solid rgba(91,141,238,.25); border-radius: 5px;
+      padding: .2rem .6rem; font-size: .78rem; font-weight: 600;
+      cursor: pointer; transition: background .13s;
+      max-width: 100%; touch-action: manipulation;
+      /* Truncar nombres largos */
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .clan-btn:hover { background: rgba(91,141,238,.2); }
+    .no-clan { font-size: .76rem; color: var(--text3); }
+
+    .pj-born {
+      font-size: .78rem; color: var(--text2);
+      margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .3rem; align-items: baseline;
+    }
+    .pj-born strong { color: var(--text); }
+    .pj-born-note   { font-size: .68rem; color: var(--text3); }
+
+    /* Alias de nombre antiguo */
+    .pj-alias {
+      font-size: .73rem; color: var(--text3); margin-bottom: .3rem;
+    }
+    .pj-alias em { color: var(--text2); font-style: normal; }
+
+    /* Última vez online */
+    .pj-lastonline {
+      font-size: .78rem; color: var(--acc2);
+      margin-bottom: .35rem;
+    }
+
+    /* Fila del clan */
+    .pj-clan-row { margin: .3rem 0 .5rem; }
+
+    /* No top 100 — más visible */
+    .pj-notop {
+      margin-top: .55rem;
+      background: rgba(245,158,11,.07);
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: 6px; padding: .45rem .65rem;
+      font-size: .76rem; color: var(--orange, #f59e0b);
+      line-height: 1.5;
+    }
+    .pj-notop-icon { margin-right: .2rem; }
+    .pj-notop-sub  { font-size: .7rem; color: var(--text3); }
+
+    .pj-err   { font-size: .8rem; color: var(--red); }
+
+    /* ════════════════════════════════════════════════
+       GRID DE 4 SKILLS
+    ════════════════════════════════════════════════ */
+    .sk-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .42rem;
+      margin-top: .6rem;
+    }
+    /* En pantallas muy pequeñas: 2×2 */
+    @media (max-width: 340px) {
+      .sk-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .sk-box {
+      background: var(--input); border: 1px solid var(--border);
+      border-radius: 7px; padding: .5rem .4rem; text-align: center;
+    }
+    .sk-lbl {
+      font-size: .6rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: .28rem;
+    }
+    .sk-val { font-size: 1rem; font-weight: 800; }
+    .sk-val.nil { color: var(--text3); font-size: .75rem; font-weight: 400; }
+    .sk-box.m .sk-lbl, .sk-box.m .sk-val { color: var(--melee); }
+    .sk-box.d .sk-lbl, .sk-box.d .sk-val { color: var(--dist);  }
+    .sk-box.e .sk-lbl, .sk-box.e .sk-val { color: var(--def);   }
+    .sk-box.g .sk-lbl, .sk-box.g .sk-val { color: var(--magic); }
+    .sk-box.m .sk-val.nil,
+    .sk-box.d .sk-val.nil,
+    .sk-box.e .sk-val.nil,
+    .sk-box.g .sk-val.nil { color: var(--text3); }
+
+    /* Spinner de carga */
+    .sk-loading {
+      display: flex; align-items: center; gap: .45rem;
+      font-size: .8rem; color: var(--text2); padding: .2rem 0;
+    }
+    .spin-md {
+      width: 15px; height: 15px; flex-shrink: 0;
+      border: 2px solid rgba(91,141,238,.25); border-top-color: var(--acc);
+      border-radius: 50%; animation: spin .65s linear infinite;
+    }
+
+    /* ════════════════════════════════════════════════
+       TABLA DE RESULTADOS (columna derecha)
+    ════════════════════════════════════════════════ */
+    #results { min-height: 180px; }
+
+    .clan-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r); overflow: hidden;
+      box-shadow: var(--sh); animation: fadeIn .22s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(5px);} to{opacity:1;transform:none;} }
+
+    .clan-hdr {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: .38rem; padding: .65rem .95rem;
+      background: var(--card2); border-bottom: 1px solid var(--border);
+    }
+    .clan-nm { font-size: .97rem; font-weight: 800; }
+    .clan-st { display: flex; align-items: center; gap: .38rem; font-size: .78rem; color: var(--text2); }
+    .badge-on-clan {
+      display: inline-flex; align-items: center; gap: .26rem;
+      background: rgba(34,197,94,.1); color: var(--green);
+      border: 1px solid rgba(34,197,94,.26); border-radius: 20px;
+      padding: .14rem .58rem; font-size: .72rem; font-weight: 800;
+    }
+    .badge-on-clan::before {
+      content: ''; width: 6px; height: 6px; background: var(--green);
+      border-radius: 50%; animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.2;} }
+
+    /* Tabla compacta y responsiva */
+    .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    thead th {
+      background: var(--card2); color: var(--text2); font-size: .67rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      padding: .42rem .72rem; text-align: left;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    th.c, td.c { text-align: center; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(91,141,238,.04); }
+    tbody td { padding: .42rem .72rem; vertical-align: middle; }
+    td.rk { color: var(--text3); font-size: .72rem; width: 22px; text-align: right; }
+    td.lv { font-weight: 800; color: var(--acc); white-space: nowrap; }
+
+    /* Botón skills en fila de tabla */
+    .btn-sk {
+      display: inline-flex; align-items: center; gap: .22rem;
+      background: rgba(91,141,238,.1); color: var(--acc);
+      border: 1px solid rgba(91,141,238,.26); border-radius: 4px;
+      padding: .17rem .52rem; font-size: .7rem; font-weight: 700;
+      cursor: pointer; transition: background .12s; white-space: nowrap;
+      touch-action: manipulation;
+    }
+    .btn-sk:hover    { background: rgba(91,141,238,.22); }
+    .btn-sk:disabled { opacity: .45; cursor: not-allowed; }
+    .spin-xs {
+      display: inline-block; width: 9px; height: 9px;
+      border: 2px solid rgba(91,141,238,.25); border-top-color: var(--acc);
+      border-radius: 50%; animation: spin .55s linear infinite;
+    }
+
+    /* Fila expandible de skills */
+    .sk-row { display: none; }
+    .sk-row.open { display: table-row; }
+    .sk-detail {
+      padding: .55rem .85rem .65rem 2rem;
+      background: #0e1120; border-top: 1px solid var(--border);
+    }
+
+    /* Mensajes */
+    .msg { padding: 1.6rem .9rem; text-align: center; color: var(--text2); font-size: .85rem; }
+    .msg.err { color: var(--red); }
+    .msg .ico { font-size: 1.6rem; margin-bottom: .35rem; }
+
+    /* Placeholder */
+    #ph { text-align: center; color: var(--text3); padding: 2.5rem .9rem; }
+    #ph .ico { font-size: 2.5rem; margin-bottom: .5rem; }
+
+    /* ════════════════════════════════════════════════
+       AJUSTES EXTRA PARA MÓVIL
+    ════════════════════════════════════════════════ */
+    @media (max-width: 480px) {
+      body { padding: .75rem .65rem 2.5rem; }
+      .ctrl-row { gap: .4rem; }
+      /* En móvil la tabla es muy ancha: reducir padding */
+      tbody td { padding: .38rem .55rem; }
+      thead th  { padding: .38rem .55rem; }
+    }
+    /* Evitar que el input haga zoom en iOS */
+    @supports (-webkit-touch-callout: none) {
+      .field { font-size: 16px !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Rucoy <span>Tracker</span></h1>
+    <p>Jugadores conectados en tiempo real</p>
+  </header>
+
+  <div class="layout">
+
+    <!-- ══ SIDEBAR ════════════════════════════════════════════════════════ -->
+    <div class="sidebar">
+
+      <!-- Buscar clan -->
+      <div class="card">
+        <div class="card-title">🏰 Clan</div>
+        <div class="iw" id="clan-iw">
+          <input id="clan-in" class="field"
+            type="text" placeholder="Nombre del clan…"
+            autocomplete="off" spellcheck="false" />
+          <div class="drop" id="clan-drop"></div>
+        </div>
+        <div class="ctrl-row">
+          <button class="btn" id="btn-upd" onclick="buscarClan()">
+            <span class="btn-icon">⟳</span>
+            <span class="spin-sm"></span>
+            Actualizar
+          </button>
+          <label class="auto-lbl">
+            <input type="checkbox" id="chk-auto" onchange="toggleAuto()" />
+            Auto cada
+            <select id="sel-int">
+              <option value="60">1 min</option>
+              <option value="120">2 min</option>
+              <option value="180" selected>3 min</option>
+              <option value="300">5 min</option>
+            </select>
+          </label>
+          <span id="countdown"></span>
+        </div>
+        <div id="status"></div>
+      </div>
+
+      <!-- Buscar jugador -->
+      <div class="card">
+        <div class="card-title">🔍 Buscar jugador</div>
+        <div class="player-row">
+          <input id="pj-in" class="field"
+            type="text" placeholder="Nombre del jugador…"
+            autocomplete="off" spellcheck="false" />
+          <button class="btn-pj" id="btn-pj" onclick="buscarJugador()">Ver skills</button>
+        </div>
+        <div id="pj-result"></div>
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- ══ RESULTADOS ═════════════════════════════════════════════════════ -->
+    <div id="results">
+      <div id="ph">
+        <div class="ico">🎮</div>
+        Escribe un clan y pulsa <strong>Actualizar</strong>
+      </div>
+    </div>
+
+  </div><!-- /layout -->
+</div><!-- /wrap -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Rucoy Tracker — JS
+═══════════════════════════════════════════════════════════════════════════ */
+
+let debT   = null;   // debounce buscador de clan
+let autoT  = null;   // timer auto-refresh
+let cdT    = null;   // timer countdown
+let secsL  = 0;
+let busy   = false;  // evita peticiones simultáneas al clan
+let sugIdx = -1;
+const skCache = {};  // caché de skills por nombre de jugador
+// FIX caché obsoleto: se invalida automáticamente cada 10 minutos
+const SK_CACHE_TTL = 10 * 60 * 1000;
+const skCacheTs   = {}; // timestamps de inserción
+
+function skCacheGet(nom) {
+  if (!skCache[nom]) return null;
+  if (Date.now() - (skCacheTs[nom] || 0) > SK_CACHE_TTL) {
+    delete skCache[nom]; delete skCacheTs[nom]; return null;
+  }
+  return skCache[nom];
+}
+function skCacheSet(nom, data) {
+  skCache[nom] = data; skCacheTs[nom] = Date.now();
+}
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+const esc = s => String(s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+const fmtTs = ts => new Date(ts*1000).toLocaleTimeString("es-ES",
+  {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+
+// Trunca texto largo dejando N caracteres y añadiendo "…"
+const trunc = (s, n=22) => s && s.length > n ? s.slice(0,n)+"…" : s;
+
+// ── Autocompletado de clanes ──────────────────────────────────────────────────
+const clanIn  = document.getElementById("clan-in");
+const clanDrp = document.getElementById("clan-drop");
+
+clanIn.addEventListener("input", () => {
+  clearTimeout(debT);
+  const q = clanIn.value.trim();
+  if (!q) { cerrarDrop(); return; }
+  debT = setTimeout(() => pedirSugs(q), 220);
+});
+
+clanIn.addEventListener("keydown", e => {
+  const items = clanDrp.querySelectorAll(".sug");
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    sugIdx = Math.min(sugIdx+1, items.length-1);
+    items.forEach((el,i) => el.classList.toggle("hi", i===sugIdx));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    sugIdx = Math.max(sugIdx-1, -1);
+    items.forEach((el,i) => el.classList.toggle("hi", i===sugIdx));
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (sugIdx >= 0 && items[sugIdx]) elegirClan(items[sugIdx].dataset.n);
+    else { cerrarDrop(); buscarClan(); }
+  } else if (e.key === "Escape") {
+    cerrarDrop();
+  }
+});
+
+async function pedirSugs(q) {
+  clanDrp.style.display = "block";
+  clanDrp.innerHTML = `<div class="sug-msg">Buscando…</div>`;
+  sugIdx = -1;
+  try {
+    const r = await fetch(`/api/guilds?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    if (d.cargando) {
+      clanDrp.innerHTML = `<div class="sug-msg">⏳ Cargando lista de clanes…</div>`;
+      return;
+    }
+    mostrarSugs(d.guilds || [], q, d.total);
+  } catch {
+    clanDrp.innerHTML = `<div class="sug-msg">Error al buscar.</div>`;
+  }
+}
+
+function mostrarSugs(guilds, q, total) {
+  if (!guilds.length) {
+    clanDrp.innerHTML = `<div class="sug-msg">Sin resultados para "${esc(q)}"</div>`;
+    return;
+  }
+  const re = new RegExp(`(${esc(q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`, "gi");
+  const html = guilds.map(n =>
+    `<div class="sug" data-n="${esc(n)}">${esc(n).replace(re,"<mark>$1</mark>")}</div>`
+  ).join("");
+  const extra = total > guilds.length
+    ? `<div class="sug-msg" style="font-size:.7rem;padding:.22rem .85rem">${guilds.length}/${total}</div>` : "";
+  clanDrp.innerHTML = html + extra;
+  clanDrp.querySelectorAll(".sug").forEach(el =>
+    el.addEventListener("mousedown", e => { e.preventDefault(); elegirClan(el.dataset.n); })
+  );
+}
+
+function elegirClan(n) { clanIn.value = n; cerrarDrop(); buscarClan(); }
+function cerrarDrop()   { clanDrp.style.display = "none"; sugIdx = -1; }
+document.addEventListener("click", e => {
+  if (!e.target.closest("#clan-iw")) cerrarDrop();
+});
+
+// ── Búsqueda de clan ──────────────────────────────────────────────────────────
+async function buscarClan() {
+  const nom = clanIn.value.trim();
+  if (!nom) {
+    document.getElementById("results").innerHTML =
+      `<div id="ph"><div class="ico">💬</div>Escribe un nombre de clan.</div>`;
+    return;
+  }
+  if (busy) return;
+  busy = true;
+
+  const btn = document.getElementById("btn-upd");
+  btn.classList.add("loading");
+  document.getElementById("status").textContent = "Consultando…";
+
+  try {
+    const r = await fetch(`/api/online?clan=${encodeURIComponent(nom)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const cont = document.getElementById("results");
+    cont.innerHTML = "";
+    d.resultados.forEach(c => cont.appendChild(renderClan(c)));
+    document.getElementById("status").textContent = `Actualizado: ${fmtTs(d.timestamp)}`;
+  } catch (err) {
+    document.getElementById("results").innerHTML = `
+      <div class="clan-card"><div class="msg err">
+        <div class="ico">🔌</div>No se pudo conectar.<br>
+        <small>${esc(err.message)}</small>
+      </div></div>`;
+    document.getElementById("status").textContent = "Error.";
+  } finally {
+    // FIX: siempre liberar busy y quitar spinner, incluso si hay excepción
+    btn.classList.remove("loading");
+    busy = false;
+  }
+}
+
+// ── Renderizado de clan ───────────────────────────────────────────────────────
+function renderClan(d) {
+  const card = document.createElement("div");
+  card.className = "clan-card";
+
+  if (d.error) {
+    card.innerHTML = `
+      <div class="clan-hdr"><span class="clan-nm">⚠ ${esc(d.clan)}</span></div>
+      <div class="msg err"><div class="ico">❌</div>${esc(d.error)}</div>`;
+    return card;
+  }
+  if (!d.total_online) {
+    card.innerHTML = `
+      <div class="clan-hdr">
+        <span class="clan-nm">${esc(d.clan)}</span>
+        <div class="clan-st">0 de ${d.total_miembros}</div>
+      </div>
+      <div class="msg"><div class="ico">😴</div>Ningún miembro conectado.</div>`;
+    return card;
+  }
+
+  const rows = d.online.map((j, i) => {
+    const id  = `s_${d.clan.replace(/\W/g,"_")}_${i}`;
+    const nom = esc(j.nombre);
+    // FIX XSS: nombre se pasa via data-nom (atributo HTML), no interpolado en onclick
+    return `
+      <tr>
+        <td class="rk">${i+1}</td>
+        <td>${nom}</td>
+        <td class="lv">${j.nivel}</td>
+        <td class="c">
+          <button class="btn-sk" id="b_${id}" data-id="${id}" data-nom="${nom}">⚡</button>
+        </td>
+      </tr>
+      <tr class="sk-row" id="r_${id}">
+        <td colspan="4"><div class="sk-detail" id="d_${id}"></div></td>
+      </tr>`;
+  }).join("");
+
+  card.innerHTML = `
+    <div class="clan-hdr">
+      <span class="clan-nm">${esc(d.clan)}</span>
+      <div class="clan-st">
+        <span class="badge-on-clan">${d.total_online} online</span>
+        <span>/ ${d.total_miembros}</span>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Jugador</th><th>Lv</th><th class="c">⚡</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  return card;
+}
+
+// ── Skills en tabla — delegación de eventos (FIX XSS onclick) ────────────────
+// Usamos un listener en el contenedor de resultados en vez de onclick inline.
+// Así el nombre del jugador nunca se interpola en código JS.
+document.getElementById("results").addEventListener("click", e => {
+  const btn = e.target.closest(".btn-sk[data-id]");
+  if (!btn) return;
+  // Decodificar el nombre: esc() convirtió & → &amp; etc., revertimos
+  const tmp  = document.createElement("span");
+  tmp.innerHTML = btn.dataset.nom;
+  const nom  = tmp.textContent;  // nombre real sin encoding HTML
+  togSk(btn.dataset.id, nom);
+});
+
+async function togSk(id, nom) {
+  const row = document.getElementById(`r_${id}`);
+  const det = document.getElementById(`d_${id}`);
+  const btn = document.getElementById(`b_${id}`);
+
+  if (row.classList.contains("open")) {
+    row.classList.remove("open"); btn.textContent = "⚡"; return;
+  }
+  if (skCacheGet(nom)) {
+    pintarSk(det, skCacheGet(nom)); row.classList.add("open"); btn.textContent = "▲"; return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin-xs"></span>`;
+  row.classList.add("open");
+  det.innerHTML = `<div class="sk-loading"><span class="spin-md"></span>Buscando (~10s)…</div>`;
+
+  try {
+    const r = await fetch(`/api/skills?name=${encodeURIComponent(nom)}`);
+    const d = await r.json();
+    skCacheSet(nom, d);
+    pintarSk(det, d);
+  } catch(err) {
+    det.innerHTML = `<span style="color:var(--red);font-size:.78rem">Error: ${esc(err.message)}</span>`;
+  }
+  btn.disabled = false; btn.textContent = "▲";
+}
+
+// ── Buscador de jugador individual ────────────────────────────────────────────
+document.getElementById("pj-in").addEventListener("keydown", e => {
+  if (e.key === "Enter") buscarJugador();
+});
+
+async function buscarJugador() {
+  const nom = document.getElementById("pj-in").value.trim();
+  if (!nom) return;
+
+  const res = document.getElementById("pj-result");
+  const btn = document.getElementById("btn-pj");
+  res.style.display = "block";
+  btn.disabled = true; btn.textContent = "…";
+
+  if (skCacheGet(nom)) {
+    mostrarPj(res, skCacheGet(nom));
+    btn.disabled = false; btn.textContent = "Ver skills"; return;
+  }
+
+  res.innerHTML = `<div class="pj-card"><div class="sk-loading"><span class="spin-md"></span>Buscando a ${esc(nom)}…</div></div>`;
+
+  try {
+    const r = await fetch(`/api/skills?name=${encodeURIComponent(nom)}`);
+    const d = await r.json();
+    skCacheSet(nom, d);
+    mostrarPj(res, d);
+  } catch(err) {
+    res.innerHTML = `<div class="pj-card"><div class="pj-err">Error: ${esc(err.message)}</div></div>`;
+  }
+  btn.disabled = false; btn.textContent = "Ver skills";
+}
+
+function mostrarPj(cont, d) {
+  if (d.error && !d.born) {
+    cont.innerHTML = `<div class="pj-card"><div class="pj-err">❌ ${esc(d.error)}</div></div>`;
+    return;
+  }
+
+  // ── Nombre actual (si cambió de nombre) ──────────────────────────────────
+  const nombreMostrar = (d.nombre_actual &&
+    d.nombre_actual.toLowerCase() !== d.nombre.toLowerCase())
+    ? d.nombre_actual : d.nombre;
+  const aliasHtml = (d.nombre_actual &&
+    d.nombre_actual.toLowerCase() !== d.nombre.toLowerCase())
+    ? `<div class="pj-alias">Antes: <em>${esc(d.nombre)}</em></div>` : "";
+
+  // ── Badges ───────────────────────────────────────────────────────────────
+  const onBadge = d.online
+    ? `<span class="badge-on">● Online</span>`
+    : `<span class="badge-off">● Offline</span>`;
+  const nivelBadge = d.nivel != null
+    ? `<span class="pj-nivel">Lv ${d.nivel}</span>` : "";
+
+  // ── Última vez online ────────────────────────────────────────────────────
+  let lastHtml = "";
+  if (d.last_online) {
+    const txt = d.last_online.toLowerCase().includes("currently")
+      ? "Conectado ahora mismo" : `Última vez: ${d.last_online}`;
+    lastHtml = `<div class="pj-lastonline">🕐 ${esc(txt)}</div>`;
+  }
+
+  // ── Clan ─────────────────────────────────────────────────────────────────
+  let clanHtml = `<span class="no-clan">Sin clan</span>`;
+  if (d.clan) {
+    const display = trunc(d.clan, 24);
+    // FIX: nombre del clan en data-clan, no interpolado en onclick
+    clanHtml = `<button class="clan-btn" title="${esc(d.clan)}" data-clan="${esc(d.clan)}">
+      🏰 ${esc(display)}
+    </button>`;
+  }
+
+  // ── Nacimiento ───────────────────────────────────────────────────────────
+  const bornHtml = d.born ? `
+    <div class="pj-born">
+      🎂 Nacido: <strong>${esc(d.born)}</strong>
+      <span class="pj-born-note">· búsqueda en 3 meses consecutivos</span>
+    </div>` : "";
+
+  // ── No top 100 ───────────────────────────────────────────────────────────
+  const noTop = todoNull(d) ? `
+    <div class="pj-notop">
+      <span class="pj-notop-icon">⚠️</span>
+      No figura en el top 100 de ningún skill.<br>
+      <span class="pj-notop-sub">Skills bajos, nombre reciente o no registrado en highscores.</span>
+    </div>` : "";
+
+  cont.innerHTML = `
+    <div class="pj-card">
+      <div class="pj-head">
+        <span class="pj-name">${esc(nombreMostrar)}</span>
+        ${onBadge}
+        ${nivelBadge}
+      </div>
+      ${aliasHtml}
+      ${lastHtml}
+      <div class="pj-clan-row">${clanHtml}</div>
+      <div class="sk-grid">${skBoxes(d)}</div>
+      ${bornHtml}
+      ${noTop}
+    </div>`;
+}
+
+// ── Skills compartidas ────────────────────────────────────────────────────────
+function pintarSk(cont, d) {
+  if (d.error && !d.born) {
+    cont.innerHTML = `<span style="color:var(--red);font-size:.78rem">❌ ${esc(d.error)}</span>`;
+    return;
+  }
+  const born = d.born ? `<div class="pj-born" style="margin-top:.35rem">🎂 ${esc(d.born)}</div>` : "";
+  const noTop = todoNull(d)
+    ? `<div class="pj-notop">No figura en top 100.</div>` : "";
+  cont.innerHTML = `<div class="sk-grid" style="max-width:380px">${skBoxes(d)}</div>${born}${noTop}`;
+}
+
+function skBoxes(d) {
+  const fv = v => v != null
+    ? `<div class="sk-val">${v}</div>`
+    : `<div class="sk-val nil">—</div>`;
+  return `
+    <div class="sk-box m"><div class="sk-lbl">⚔ Melee</div>${fv(d.melee)}</div>
+    <div class="sk-box d"><div class="sk-lbl">🏹 Dist</div>${fv(d.distance)}</div>
+    <div class="sk-box e"><div class="sk-lbl">🛡 Def</div>${fv(d.defense)}</div>
+    <div class="sk-box g"><div class="sk-lbl">🔮 Magia</div>${fv(d.magic)}</div>`;
+}
+
+function todoNull(d) {
+  return d.melee==null && d.distance==null && d.magic==null && d.defense==null;
+}
+
+// Delegación para el botón del clan en el panel de jugador
+// FIX: evita interpolar el nombre en onclick, maneja cualquier carácter especial
+document.getElementById("pj-result").addEventListener("click", e => {
+  const btn = e.target.closest(".clan-btn[data-clan]");
+  if (!btn) return;
+  const tmp = document.createElement("span");
+  tmp.innerHTML = btn.dataset.clan;
+  cargarClan(tmp.textContent);
+});
+
+// ── Cargar clan desde panel de jugador ────────────────────────────────────────
+// FIX: en vez de interpolar el nombre en onclick="cargarClan('...')",
+// guardamos el nombre en un data attribute y lo leemos desde JS.
+function cargarClan(nombre) {
+  document.getElementById("clan-in").value = nombre;
+  cerrarDrop();
+  buscarClan();
+  setTimeout(() => {
+    document.getElementById("results").scrollIntoView({behavior:"smooth", block:"start"});
+  }, 200);
+}
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+function toggleAuto() {
+  const on  = document.getElementById("chk-auto").checked;
+  const sec = parseInt(document.getElementById("sel-int").value, 10);
+  const cd  = document.getElementById("countdown");
+  clearInterval(autoT); clearInterval(cdT); cd.textContent = "";
+  if (!on) return;
+  secsL = sec; cd.textContent = `${secsL}s`;
+  cdT = setInterval(() => {
+    secsL--;
+    cd.textContent = secsL > 0 ? `${secsL}s` : `${secsL=sec}s`;
+  }, 1000);
+  // FIX: si el input está vacío cuando dispara, detener auto-refresh
+  autoT = setInterval(() => {
+    if (!clanIn.value.trim()) {
+      toggleAuto(); // detiene los timers
+      document.getElementById("chk-auto").checked = false;
+      return;
+    }
+    buscarClan();
+  }, sec * 1000);
+}
+document.getElementById("sel-int").addEventListener("change", () => {
+  if (document.getElementById("chk-auto").checked) toggleAuto();
+});
+</script>
+</body>
+</html>
