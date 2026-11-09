@@ -465,7 +465,8 @@
    Rucoy Tracker — JS
 ═══════════════════════════════════════════════════════════════════════════ */
 
-let debT   = null;   // debounce buscador de clan
+let debT     = null;   // debounce buscador de clan
+let abortCtrl = null;  // AbortController para cancelar petición anterior a /api/guilds
 let autoT  = null;   // timer auto-refresh
 let cdT    = null;   // timer countdown
 let secsL  = 0;
@@ -506,7 +507,8 @@ clanIn.addEventListener("input", () => {
   clearTimeout(debT);
   const q = clanIn.value.trim();
   if (!q) { cerrarDrop(); return; }
-  debT = setTimeout(() => pedirSugs(q), 220);
+  // FIX debounce: 400ms — evita petición en cada tecla
+  debT = setTimeout(() => pedirSugs(q), 400);
 });
 
 clanIn.addEventListener("keydown", e => {
@@ -529,19 +531,28 @@ clanIn.addEventListener("keydown", e => {
 });
 
 async function pedirSugs(q) {
+  // FIX AbortController: cancela la petición anterior si el usuario
+  // sigue escribiendo mientras la anterior aún no terminó.
+  if (abortCtrl) abortCtrl.abort();
+  abortCtrl = new AbortController();
+  const signal = abortCtrl.signal;
+
   clanDrp.style.display = "block";
   clanDrp.innerHTML = `<div class="sug-msg">Buscando…</div>`;
   sugIdx = -1;
   try {
-    const r = await fetch(`/api/guilds?q=${encodeURIComponent(q)}`);
+    const r = await fetch(`/api/guilds?q=${encodeURIComponent(q)}`, { signal });
     const d = await r.json();
     if (d.cargando) {
       clanDrp.innerHTML = `<div class="sug-msg">⏳ Cargando lista de clanes…</div>`;
       return;
     }
     mostrarSugs(d.guilds || [], q, d.total);
-  } catch {
-    clanDrp.innerHTML = `<div class="sug-msg">Error al buscar.</div>`;
+  } catch(err) {
+    // AbortError es normal — el usuario siguió escribiendo
+    if (err.name !== "AbortError") {
+      clanDrp.innerHTML = `<div class="sug-msg">Error al buscar.</div>`;
+    }
   }
 }
 
